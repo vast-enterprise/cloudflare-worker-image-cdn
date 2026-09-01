@@ -8,6 +8,8 @@ import { getImageDimensions } from "./dimensions";
 import { getCachedImage, putCachedImage } from "./cache";
 import { parseSteps, snapToStep } from "./steps";
 import { downscale, PHOTON_MAX_SOURCE_PIXELS } from "./downscale";
+import { parseKeyPairMap, verifySignedUrl } from "./signature";
+import { createS3Client, fetchFromS3, parsePathPrefixRoutes, resolveS3Route } from "./s3origin";
 
 function passthrough(response: Response): Response {
 	return new Response(response.body, {
@@ -23,6 +25,8 @@ export async function proxyRequest(
 	ctx: ExecutionContext,
 	stepsQualityRaw?: string,
 	stepsSizeRaw?: string,
+	cloudFrontKeyPairMapRaw?: string,
+	s3RoutesEnv?: Record<string, string | undefined>,
 ): Promise<Response> {
 	if (request.method !== "GET" && request.method !== "HEAD") {
 		return new Response("Method Not Allowed", {
@@ -32,6 +36,19 @@ export async function proxyRequest(
 	}
 
 	const url = new URL(request.url);
+
+	// Verify CloudFront-style signed URL access control, if configured.
+	const keyPairMap = parseKeyPairMap(cloudFrontKeyPairMapRaw);
+	if (Object.keys(keyPairMap).length > 0) {
+		const result = await verifySignedUrl(url, keyPairMap);
+		if (!result.valid) {
+			return new Response(`Signature verification failed: ${result.error}`, { status: 403 });
+		}
+		url.searchParams.delete("Key-Pair-Id");
+		url.searchParams.delete("Policy");
+		url.searchParams.delete("Signature");
+	}
+
 	const originUrl = `${originBaseUrl}${url.pathname}${url.search}`;
 
 	const accept = request.headers.get("accept") || "";
@@ -67,12 +84,22 @@ export async function proxyRequest(
 		}
 	}
 
-	// Cache miss — fetch from origin
+	// Cache miss — fetch from origin, signing with SigV4 if a matching S3-compatible route is configured
 	const originHost = new URL(originUrl).host;
-	const originResponse = await fetch(originUrl, {
-		method: request.method,
-		headers: { Host: originHost },
-	});
+	const routes = parsePathPrefixRoutes(s3RoutesEnv ?? {});
+	const matchedRoute = resolveS3Route(url.pathname, routes);
+
+	let originResponse: Response;
+	if (matchedRoute) {
+		const client = createS3Client(matchedRoute);
+		const resolvedUrl = `${new URL(originUrl).protocol}//${matchedRoute.host}${url.pathname}${url.search}`;
+		originResponse = await fetchFromS3(client, resolvedUrl, request.method);
+	} else {
+		originResponse = await fetch(originUrl, {
+			method: request.method,
+			headers: { Host: originHost },
+		});
+	}
 
 	if (!originResponse.ok) {
 		return passthrough(originResponse);

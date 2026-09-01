@@ -98,6 +98,69 @@ Every response includes an `X-Cache` header:
 
 Cache writes are non-blocking: the response is sent to the client immediately and the image is persisted to R2 in the background. Responses carry `Cache-Control: public, max-age=86400`.
 
+## Access control & private origins
+
+Both features below are optional and off by default — without configuration the worker behaves exactly as described above.
+
+### Signed URL verification
+
+Set the `CLOUDFRONT_KEY_PAIR_MAP` secret to require CloudFront-style signed URLs before the worker will serve a request:
+
+```sh
+wrangler secret put CLOUDFRONT_KEY_PAIR_MAP
+# {"K1676C64NMVM2J": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"}
+```
+
+Requests must carry `Key-Pair-Id`, `Policy`, and `Signature` query params (CloudFront's URL-safe base64: `+` → `-`, `=` → `_`, `/` → `~`). The policy's `Statement[0].Condition.DateLessThan["AWS:EpochTime"]` is checked against the current time. Requests with a missing, expired, or invalid signature get a `403`. On success, the three signature params are stripped before the request continues through the pipeline (not forwarded to the origin, not part of the cache key).
+
+### Private S3-compatible origins
+
+By default the worker fetches from `PROXY_ORIGINAL_URL` anonymously. To sign origin requests with AWS SigV4 — required for private S3-compatible buckets — configure one or more numbered routes, starting at `0`:
+
+| Variable | Sensitive | Description |
+| --- | --- | --- |
+| `S3_COMPATIBLE_<N>_PREFIX` | No (`vars`) | Path prefix this route matches, e.g. `/vendor-a/`. An **empty string** matches every path — use it as a catch-all default origin. |
+| `S3_COMPATIBLE_<N>_HOST` | No (`vars`) | S3-compatible host to sign and fetch from. |
+| `S3_COMPATIBLE_<N>_REGION` | No (`vars`) | Optional, defaults to `us-east-1`. |
+| `S3_COMPATIBLE_<N>_ACCESS_KEY_ID` | Yes (`wrangler secret put`) | |
+| `S3_COMPATIBLE_<N>_SECRET_ACCESS_KEY` | Yes (`wrangler secret put`) | |
+
+Routes are numbered from `0` with no gaps — the worker scans until it hits the first index missing a required field, so route `2` is ignored if route `1` isn't fully configured. Matching uses the longest applicable prefix; a path that doesn't match any configured prefix falls back to the existing anonymous fetch.
+
+Example — a single private bucket for everything:
+
+```sh
+# wrangler.jsonc vars
+S3_COMPATIBLE_0_PREFIX = ""
+S3_COMPATIBLE_0_HOST = "my-bucket.s3.us-east-1.amazonaws.com"
+
+# secrets
+wrangler secret put S3_COMPATIBLE_0_ACCESS_KEY_ID
+wrangler secret put S3_COMPATIBLE_0_SECRET_ACCESS_KEY
+```
+
+Example — two vendor-specific buckets plus a catch-all default:
+
+```sh
+# wrangler.jsonc vars
+S3_COMPATIBLE_0_PREFIX = "/vendor-a/"
+S3_COMPATIBLE_0_HOST = "vendor-a.s3.us-west-2.amazonaws.com"
+S3_COMPATIBLE_0_REGION = "us-west-2"
+S3_COMPATIBLE_1_PREFIX = "/vendor-b/"
+S3_COMPATIBLE_1_HOST = "vendor-b.s3.eu-west-1.amazonaws.com"
+S3_COMPATIBLE_1_REGION = "eu-west-1"
+S3_COMPATIBLE_2_PREFIX = ""
+S3_COMPATIBLE_2_HOST = "default-bucket.s3.us-east-1.amazonaws.com"
+
+# secrets (one AKSK pair per route)
+wrangler secret put S3_COMPATIBLE_0_ACCESS_KEY_ID
+wrangler secret put S3_COMPATIBLE_0_SECRET_ACCESS_KEY
+wrangler secret put S3_COMPATIBLE_1_ACCESS_KEY_ID
+wrangler secret put S3_COMPATIBLE_1_SECRET_ACCESS_KEY
+wrangler secret put S3_COMPATIBLE_2_ACCESS_KEY_ID
+wrangler secret put S3_COMPATIBLE_2_SECRET_ACCESS_KEY
+```
+
 ## Deploy
 
 One click — you only need a Cloudflare account with [R2 enabled](https://developers.cloudflare.com/r2/get-started/).

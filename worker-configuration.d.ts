@@ -14,6 +14,7 @@ declare namespace Cloudflare {
 		R2_SECRET_ACCESS_KEY: string;
 		R2_BUCKET: string;
 		WORKER_CDN_IMAGES: R2Bucket;
+		CLOUDFRONT_KEY_PAIR_MAP?: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

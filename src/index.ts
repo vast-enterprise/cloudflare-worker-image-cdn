@@ -3,7 +3,16 @@ import { proxyRequest } from "./util/proxy";
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		try {
-			return await proxyRequest(request, env.PROXY_ORIGINAL_URL, env.WORKER_CDN_IMAGES, ctx, env.STEPS_QUALITY, env.STEPS_SIZE);
+			return await proxyRequest(
+				request,
+				env.PROXY_ORIGINAL_URL,
+				env.WORKER_CDN_IMAGES,
+				ctx,
+				env.STEPS_QUALITY,
+				env.STEPS_SIZE,
+				env.CLOUDFRONT_KEY_PAIR_MAP,
+				env as unknown as Record<string, string | undefined>,
+			);
 		} catch (err) {
 			// Last-resort fallback: if anything upstream of the transform pipeline throws (URL parsing, R2 outage, origin fetch failure, etc.), redirect to the origin so the client still gets an image instead of a 500.
 			console.error("proxyRequest failed, falling back to origin redirect", err);
