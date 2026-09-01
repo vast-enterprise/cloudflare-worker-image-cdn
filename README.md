@@ -22,21 +22,54 @@ Runs entirely on Cloudflare's edge — no servers to manage, no build step per i
 
 ## How it works
 
-```text
-Request
-  ↓
-Check R2 cache
-  ├── HIT  → Serve cached image
-  └── MISS → Fetch from origin
-              ↓
-             Resize (if requested)
-              ↓
-             Convert to AVIF / WebP
-              ↓
-             Store in R2 (non-blocking)
-              ↓
-             Serve image
+```mermaid
+flowchart TD
+    Start([Request]) --> MethodCheck{GET/HEAD?}
+    MethodCheck -->|no| Method405[405 Method Not Allowed]
+    MethodCheck -->|yes| SigCheck{CLOUDFRONT_KEY_PAIR_MAP<br/>configured?}
+
+    SigCheck -->|no, feature off| ParseParams
+    SigCheck -->|yes| VerifySig{Signed URL<br/>valid?}
+    VerifySig -->|no| Sig403[403 Signature<br/>verification failed]
+    VerifySig -->|yes| StripParams[Strip signature params]
+    StripParams --> ParseParams
+
+    ParseParams[Snap w/h/quality<br/>to configured steps] --> CacheCheck{R2 cache hit?}
+    CacheCheck -->|yes| CacheHit[200 · X-Cache: HIT]
+    CacheCheck -->|no| RouteMatch{Path matches an<br/>S3_COMPATIBLE_&lt;N&gt;_PREFIX?}
+
+    RouteMatch -->|yes, incl. empty-prefix catch-all| SigV4Fetch[SigV4-signed fetch<br/>to that route's host]
+    RouteMatch -->|no route configured| AnonFetch[Anonymous fetch<br/>PROXY_ORIGINAL_URL]
+    SigV4Fetch --> OriginResp
+    AnonFetch --> OriginResp
+
+    OriginResp{Origin response ok?} -->|no| PT1[passthrough<br/>origin response as-is]
+    OriginResp -->|yes| CTCheck{Content-Type is<br/>image/* and not svg?}
+
+    CTCheck -->|no, e.g. binary/octet-stream,<br/>application/zip, .glb, etc.| PT2["passthrough (streamed)<br/>no transcode, no cache, w/h/quality ignored"]
+    CTCheck -->|yes| FormatCheck{Client Accept supports<br/>AVIF/WebP?}
+    FormatCheck -->|no, original only| PT3[passthrough]
+
+    FormatCheck -->|yes| ReadBuffer[Buffer full response] --> DimCheck{Real dimensions<br/>parseable?}
+    DimCheck -->|no, bad header /<br/>Content-Type lied| PT4[passthrough]
+    DimCheck -->|yes| SizeCheck{Target size exceeds<br/>encoder memory budget?}
+
+    SizeCheck -->|yes| Bypass[200 · X-Cache: BYPASS<br/>original bytes]
+    SizeCheck -->|no| Downscale[Downscale if needed<br/>photon or WIO resize] --> Encode{AVIF/WebP<br/>encode ok?}
+
+    Encode -->|AVIF fails, WebP fallback fails too| PT5[passthrough<br/>original bytes]
+    Encode -->|ok| WriteCache[Write R2 cache<br/>non-blocking] --> Success[200 · X-Cache: MISS<br/>transcoded image]
+
+    classDef errorNode fill:#dc4a4a,stroke:#a83232,color:#fff
+    classDef passthroughNode fill:#e8a33d,stroke:#b8791e,color:#1a1a1a
+    classDef successNode fill:#3fa860,stroke:#2d7a45,color:#fff
+
+    class Method405,Sig403 errorNode
+    class PT1,PT2,PT3,PT4,PT5,Bypass passthroughNode
+    class CacheHit,Success successNode
 ```
+
+Signed URL verification and S3-compatible SigV4 routing (orange/blue decision points above) are optional — see [Access control & private origins](#access-control--private-origins). Without them configured, the flow simplifies to: check cache → anonymous fetch → transcode → cache → serve.
 
 ## Query parameters
 
