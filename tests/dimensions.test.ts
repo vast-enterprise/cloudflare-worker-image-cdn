@@ -1,4 +1,4 @@
-import { getImageDimensions } from "../src/util/dimensions";
+import { getContentTypeForDetectedFormat, getImageDimensions } from "../src/util/dimensions";
 
 function makePng(width: number, height: number): ArrayBuffer {
 	const b = new Uint8Array(24);
@@ -49,16 +49,16 @@ function makeWebpVp8(width: number, height: number): ArrayBuffer {
 }
 
 describe("getImageDimensions", () => {
-	it("parses PNG dimensions", () => {
-		expect(getImageDimensions(makePng(1920, 1080))).toEqual({ width: 1920, height: 1080 });
+	it("parses PNG dimensions and format", () => {
+		expect(getImageDimensions(makePng(1920, 1080))).toEqual({ width: 1920, height: 1080, format: "png" });
 	});
 
-	it("parses JPEG dimensions from SOF0", () => {
-		expect(getImageDimensions(makeJpeg(800, 600))).toEqual({ width: 800, height: 600 });
+	it("parses JPEG dimensions and format from SOF0", () => {
+		expect(getImageDimensions(makeJpeg(800, 600))).toEqual({ width: 800, height: 600, format: "jpeg" });
 	});
 
-	it("parses WebP VP8 dimensions", () => {
-		expect(getImageDimensions(makeWebpVp8(640, 480))).toEqual({ width: 640, height: 480 });
+	it("parses WebP VP8 dimensions and format", () => {
+		expect(getImageDimensions(makeWebpVp8(640, 480))).toEqual({ width: 640, height: 480, format: "webp" });
 	});
 
 	it("returns null for unknown formats", () => {
@@ -68,5 +68,19 @@ describe("getImageDimensions", () => {
 
 	it("returns null for empty buffers", () => {
 		expect(getImageDimensions(new ArrayBuffer(0))).toBeNull();
+	});
+});
+
+describe("getContentTypeForDetectedFormat", () => {
+	it("returns correct MIME for png", () => {
+		expect(getContentTypeForDetectedFormat("png")).toBe("image/png");
+	});
+
+	it("returns correct MIME for jpeg", () => {
+		expect(getContentTypeForDetectedFormat("jpeg")).toBe("image/jpeg");
+	});
+
+	it("returns correct MIME for webp", () => {
+		expect(getContentTypeForDetectedFormat("webp")).toBe("image/webp");
 	});
 });

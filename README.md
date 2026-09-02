@@ -75,9 +75,12 @@ Signed URL verification and S3-compatible SigV4 routing (orange/blue decision po
 
 | Parameter | Description | Example |
 | --- | --- | --- |
-| `w` | Target width in pixels | `?w=800` |
-| `h` | Target height in pixels | `?h=600` |
+| `w` (alias: `width`) | Target width in pixels | `?w=800` |
+| `h` (alias: `height`) | Target height in pixels | `?h=600` |
 | `quality` | Output quality, `1`–`100` | `?quality=80` |
+| `format` | Force `avif` or `webp` output, bypassing `Accept`-header negotiation | `?format=webp` |
+
+`width`/`height` are accepted as aliases for `w`/`h` — both work interchangeably, kept for compatibility with callers migrating from the legacy `cf.image`-backed proxy this project replaces. When both a param and its alias are present (e.g. `?w=400&width=800`), `w`/`h` win.
 
 Resizing preserves aspect ratio and never upscales. When both `w` and `h` are provided, the worker uses whichever dimension results in the larger output (contain behavior). Dimensions are read directly from PNG `IHDR`, JPEG `SOF`, and WebP `VP8`/`VP8L` headers.
 
@@ -98,6 +101,8 @@ The worker inspects the `Accept` header and picks the best supported format:
 | **Original** | Neither modern format is accepted |
 
 AVIF encoding is memory-intensive, so images larger than **5 million pixels** (e.g. 2500×2000) automatically fall back to WebP to stay within the Cloudflare Workers 128 MB memory limit. If encoding fails at any stage, the fallback chain is `AVIF → WebP → original`, so a valid image is always returned. SVG images are passed through untouched.
+
+`?format=avif` or `?format=webp` overrides `Accept`-header negotiation entirely — the worker encodes to that format regardless of what the client claims to support. A forced `avif` request that exceeds the memory ceiling above still downgrades to WebP rather than failing. `?format=auto`, an omitted `format` param, or any value the worker can't encode (e.g. `jpeg`, `png` — there's no encoder for those here) fall through to normal `Accept`-header negotiation.
 
 ## Step snapping
 
@@ -213,3 +218,39 @@ Commit your changes — Cloudflare redeploys the worker automatically on every p
 ## License
 
 See [LICENSE](LICENSE).
+
+
+我现在想在 `ssh vast-ali-forward-squid` 机器追加一组 *xray* 与 *openresty* 配置，xray示例文件看*vast-ali-forward-squid*机器上的'/etc/xray/example.json'，应该调整inbound对应IP/端口就行，为每个服务复制一份配置出来
+
+### xray配置
+| 服务 | 协议 | 监听IP | 监听端口 |
+|---|---|---|---|
+| openapi-proxy | http | 127.0.0.100 | 8080 |
+| openapi-proxy | socks | 127.0.0.101 | 8080 |
+| image-generation-proxy | http | 127.0.0.110 | 8080 |
+| image-generation-proxy | socks | 127.0.0.111 | 8080 |
+| google-translate-proxy | http | 127.0.0.120 | 8080 |
+| google-translate-proxy | socks | 127.0.0.121 | 8080 |
+| gen-proxy | http | 127.0.0.130 | 8080 |
+| gen-proxy | socks | 127.0.0.131 | 8080 |
+| lite-llm-proxy | http | 127.0.0.200 | 8080 |
+| lite-llm-proxy | socks | 127.0.0.201 | 8080 |
+
+
+### openresty反向代理配置
+| 服务 | 监听IP | 监听端口 | 代理协议 | 代理后端  |
+|---|---|---|
+| openapi-proxy | 0.0.0.0 | 10100 | http | 127.0.0.100:8080 |
+| openapi-proxy | 0.0.0.0 | 10101 | socks | 127.0.0.101:8080 |
+| image-generation-proxy | 0.0.0.0 | 10110 | http | 127.0.0.110:8080 |
+| image-generation-proxy | 0.0.0.0 | 10111 | socks | 127.0.0.111:8080 |
+| google-translate-proxy | 0.0.0.0 | 10120 | http | 127.0.0.120:8080 |
+| google-translate-proxy | 0.0.0.0 | 10121 | socks | 127.0.0.121:8080 |
+| gen-proxy | 0.0.0.0 | 10130 | http | 127.0.0.130:8080 |
+| gen-proxy | 0.0.0.0 | 10131 | socks | 127.0.0.131:8080 |
+| lite-llm-proxy | 0.0.0.0 | 10200 | http | 127.0.0.200:8080 |
+| lite-llm-proxy | 0.0.0.0 | 10201 | socks | 127.0.0.201:8080 |
+
+
+
+
