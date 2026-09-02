@@ -7,6 +7,9 @@
 	"name": "cloudflare-worker-image-cdn",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-04-09",
+	"cache": {
+		"enabled": true
+	},
 	"observability": {
 		"enabled": true
 	},

@@ -218,39 +218,3 @@ Commit your changes — Cloudflare redeploys the worker automatically on every p
 ## License
 
 See [LICENSE](LICENSE).
-
-
-我现在想在 `ssh vast-ali-forward-squid` 机器追加一组 *xray* 与 *openresty* 配置，xray示例文件看*vast-ali-forward-squid*机器上的'/etc/xray/example.json'，应该调整inbound对应IP/端口就行，为每个服务复制一份配置出来
-
-### xray配置
-| 服务 | 协议 | 监听IP | 监听端口 |
-|---|---|---|---|
-| openapi-proxy | http | 127.0.0.100 | 8080 |
-| openapi-proxy | socks | 127.0.0.101 | 8080 |
-| image-generation-proxy | http | 127.0.0.110 | 8080 |
-| image-generation-proxy | socks | 127.0.0.111 | 8080 |
-| google-translate-proxy | http | 127.0.0.120 | 8080 |
-| google-translate-proxy | socks | 127.0.0.121 | 8080 |
-| gen-proxy | http | 127.0.0.130 | 8080 |
-| gen-proxy | socks | 127.0.0.131 | 8080 |
-| lite-llm-proxy | http | 127.0.0.200 | 8080 |
-| lite-llm-proxy | socks | 127.0.0.201 | 8080 |
-
-
-### openresty反向代理配置
-| 服务 | 监听IP | 监听端口 | 代理协议 | 代理后端  |
-|---|---|---|
-| openapi-proxy | 0.0.0.0 | 10100 | http | 127.0.0.100:8080 |
-| openapi-proxy | 0.0.0.0 | 10101 | socks | 127.0.0.101:8080 |
-| image-generation-proxy | 0.0.0.0 | 10110 | http | 127.0.0.110:8080 |
-| image-generation-proxy | 0.0.0.0 | 10111 | socks | 127.0.0.111:8080 |
-| google-translate-proxy | 0.0.0.0 | 10120 | http | 127.0.0.120:8080 |
-| google-translate-proxy | 0.0.0.0 | 10121 | socks | 127.0.0.121:8080 |
-| gen-proxy | 0.0.0.0 | 10130 | http | 127.0.0.130:8080 |
-| gen-proxy | 0.0.0.0 | 10131 | socks | 127.0.0.131:8080 |
-| lite-llm-proxy | 0.0.0.0 | 10200 | http | 127.0.0.200:8080 |
-| lite-llm-proxy | 0.0.0.0 | 10201 | socks | 127.0.0.201:8080 |
-
-
-
-
