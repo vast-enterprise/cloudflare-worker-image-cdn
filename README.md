@@ -106,12 +106,12 @@ AVIF encoding is memory-intensive, so images larger than **5 million pixels** (e
 
 ## Step snapping
 
-Requested `w`, `h`, and `quality` values are rounded **up** to the nearest configured step before processing or cache lookup. Without this, `?w=799`, `?w=800`, and `?w=801` would each produce a separate cached image; with default steps, all three snap to `w=1080` and share one cached variant.
+Requested `w`, `h`, and `quality` values are rounded **up** to the nearest configured step before processing or cache lookup. Without this, `?w=599`, `?w=600`, and `?w=601` would each produce a separate cached image; with default steps, all three snap to `w=600` and share one cached variant.
 
 | Variable | Applies to | Default |
 | --- | --- | --- |
-| `STEPS_SIZE` | `w`, `h` | `[320, 480, 720, 1080, 1920, 2560, 3840]` |
-| `STEPS_QUALITY` | `quality` | `[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]` |
+| `STEPS_SIZE` | `w`, `h` | `[125, 200, 600, 1400, 3840]` |
+| `STEPS_QUALITY` | `quality` | `[60, 85, 100]` |
 
 Values exceeding every step are clamped to the largest step. If a step array is left empty, snapping is disabled for that parameter.
 
