@@ -94,8 +94,8 @@ export async function verifySignedUrl(url: URL, keyPairMap: Record<string, strin
 			signatureBytes.buffer as ArrayBuffer,
 			policyBytes.buffer as ArrayBuffer,
 		);
-		return ok ? { valid: true } : { valid: false, error: "Signature verification failed" };
+		return ok ? { valid: true } : { valid: false, error: "signature does not match policy" };
 	} catch {
-		return { valid: false, error: "Signature verification failed" };
+		return { valid: false, error: "signature does not match policy" };
 	}
 }

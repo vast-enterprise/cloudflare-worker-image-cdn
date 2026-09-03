@@ -9,6 +9,7 @@ declare namespace Cloudflare {
 		PROXY_ORIGINAL_URL: "https://docs-cloudflare-cdn.ciannavei.dev/";
 		STEPS_QUALITY: "[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]";
 		STEPS_SIZE: "[320, 480, 720, 1024, 1080, 1920, 2560, 3840]";
+		CACHE_CONTROL_MAX_AGE: "3600";
 		R2_ACCOUNT_ID: string;
 		R2_ACCESS_KEY_ID: string;
 		R2_SECRET_ACCESS_KEY: string;

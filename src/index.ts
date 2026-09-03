@@ -12,6 +12,7 @@ export default {
 				env.STEPS_SIZE,
 				env.CLOUDFRONT_KEY_PAIR_MAP,
 				env as unknown as Record<string, string | undefined>,
+				env.CACHE_CONTROL_MAX_AGE,
 			);
 		} catch (err) {
 			// Last-resort fallback: if anything upstream of the transform pipeline throws (URL parsing, R2 outage, origin fetch failure, etc.), redirect to the origin so the client still gets an image instead of a 500.

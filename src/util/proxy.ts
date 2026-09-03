@@ -12,6 +12,13 @@ import { parseKeyPairMap, verifySignedUrl } from "./signature";
 import { createS3Client, fetchFromS3, parsePathPrefixRoutes, resolveS3Route } from "./s3origin";
 import { parseFormatOverride } from "./formatOverride";
 
+const DEFAULT_CACHE_CONTROL_MAX_AGE = 3600;
+
+function parseCacheControlMaxAge(raw: string | undefined): number {
+	const parsed = raw ? Number(raw) : NaN;
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CACHE_CONTROL_MAX_AGE;
+}
+
 function passthrough(response: Response): Response {
 	return new Response(response.body, {
 		status: response.status,
@@ -27,10 +34,10 @@ function passthrough(response: Response): Response {
 // large files requested repeatedly. Only fills in a default when the origin
 // didn't already specify one, so an origin that deliberately marks something
 // private/no-store is respected.
-function passthroughCacheable(response: Response): Response {
+function passthroughCacheable(response: Response, cacheControl: string): Response {
 	const headers = new Headers(response.headers);
 	if (!headers.has("cache-control")) {
-		headers.set("Cache-Control", "public, max-age=86400");
+		headers.set("Cache-Control", cacheControl);
 	}
 	return new Response(response.body, { status: response.status, headers });
 }
@@ -80,7 +87,10 @@ export async function proxyRequest(
 	stepsSizeRaw?: string,
 	cloudFrontKeyPairMapRaw?: string,
 	s3RoutesEnv?: Record<string, string | undefined>,
+	cacheControlMaxAgeRaw?: string,
 ): Promise<Response> {
+	const cacheControl = `public, max-age=${parseCacheControlMaxAge(cacheControlMaxAgeRaw)}`;
+
 	if (request.method !== "GET" && request.method !== "HEAD") {
 		logResult({ path: new URL(request.url).pathname, isImage: "unknown", cache: "N/A", outcome: "skipped", reason: "method-not-allowed" });
 		return new Response("Method Not Allowed", {
@@ -97,7 +107,7 @@ export async function proxyRequest(
 		const result = await verifySignedUrl(url, keyPairMap);
 		if (!result.valid) {
 			logResult({ path: url.pathname, isImage: "unknown", cache: "N/A", outcome: "failure", reason: `signature-invalid: ${result.error}`, level: "warn" });
-			return new Response(`Signature verification failed: ${result.error}`, { status: 403 });
+			return new Response(result.error ?? "signature invalid", { status: 403 });
 		}
 		url.searchParams.delete("Key-Pair-Id");
 		url.searchParams.delete("Policy");
@@ -144,7 +154,7 @@ export async function proxyRequest(
 				status: 200,
 				headers: {
 					"Content-Type": cached.contentType,
-					"Cache-Control": "public, max-age=86400",
+					"Cache-Control": cacheControl,
 					"X-Cache": "HIT",
 				},
 			});
@@ -197,7 +207,7 @@ export async function proxyRequest(
 		const sniffed = getImageDimensions(buffered);
 		if (!sniffed) {
 			logResult({ path: url.pathname, isImage: false, cache: "N/A", outcome: "skipped", reason: `not-an-image: sniffed, no recognizable header (declared ${contentType || "(no content-type)"})`, source: sourceLabel });
-			return passthroughCacheable(new Response(buffered, { status: originResponse.status, headers: originResponse.headers }));
+			return passthroughCacheable(new Response(buffered, { status: originResponse.status, headers: originResponse.headers }), cacheControl);
 		}
 		if (!format) {
 			logResult({ path: url.pathname, isImage: true, cache: "N/A", outcome: "skipped", reason: "no-format-negotiated", source: sourceLabel });
@@ -208,7 +218,7 @@ export async function proxyRequest(
 		effectiveContentType = getContentTypeForDetectedFormat(sniffed.format);
 	} else {
 		logResult({ path: url.pathname, isImage: false, cache: "N/A", outcome: "skipped", reason: `not-an-image: ${contentType}`, source: sourceLabel });
-		return passthroughCacheable(originResponse);
+		return passthroughCacheable(originResponse, cacheControl);
 	}
 
 	// Any failure in the processing pipeline below falls back to serving the
@@ -259,7 +269,7 @@ export async function proxyRequest(
 				status: 200,
 				headers: {
 					"Content-Type": effectiveContentType,
-					"Cache-Control": "public, max-age=86400",
+					"Cache-Control": cacheControl,
 					"X-Cache": "BYPASS",
 				},
 			});
@@ -319,7 +329,7 @@ export async function proxyRequest(
 			status: 200,
 			headers: {
 				"Content-Type": getContentType(outputFormat),
-				"Cache-Control": "public, max-age=86400",
+				"Cache-Control": cacheControl,
 				"X-Cache": "MISS",
 			},
 		});
@@ -329,7 +339,7 @@ export async function proxyRequest(
 			status: 200,
 			headers: {
 				"Content-Type": effectiveContentType,
-				"Cache-Control": "public, max-age=86400",
+				"Cache-Control": cacheControl,
 				"X-Cache": "BYPASS",
 			},
 		});

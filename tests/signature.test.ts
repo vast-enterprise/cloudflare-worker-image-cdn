@@ -124,7 +124,7 @@ describe("verifySignedUrl", () => {
 		const url = buildSignedUrl({ policyBytes, signatureBytes });
 		const result = await verifySignedUrl(url, { [KEY_PAIR_ID]: publicKey });
 		expect(result.valid).toBe(false);
-		expect(result.error).toMatch(/Signature verification failed/);
+		expect(result.error).toMatch(/signature does not match policy/);
 	});
 
 	it("rejects invalid base64 in Policy", async () => {
